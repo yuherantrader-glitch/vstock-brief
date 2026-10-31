@@ -13,11 +13,12 @@ d = json.load(open("docs/latest.json", encoding="utf-8"))
 m = d.get("market", {})
 fmt = lambda v: "—" if v is None else f"{v:+.1f}%"
 
-if d["date"] != today:
+catchup = os.environ.get("CATCHUP", "").strip() in ("1", "true", "yes")
+if d["date"] != today and not catchup:
     title, tmpl = f"vstock 简报 · 今天没有新数据", "grey"
     body = (f"最新一期仍是 **{d['date']}**。\n今天可能不是交易日，或者本机的每日流程没有跑完（电脑没开机、网络不通）。")
 else:
-    title, tmpl = f"vstock 收盘简报 · {d['date']}", {"防守观望": "orange", "台风预警": "red"}.get(m.get("tone"), "blue")
+    title, tmpl = f"vstock 收盘简报 · {d['date']}" + ("（补推）" if catchup else ""), {"防守观望": "orange", "台风预警": "red"}.get(m.get("tone"), "blue")
     lines = [f"**定调：{m.get('tone', '—')}**　{m.get('toneNote', '')}",
              f"恐贪 **{m.get('fg', '—')}**（{m.get('fgLabel', '')}）　股债性价比 **{m.get('bond', '—')}°C**（{m.get('bondLabel', '')}）　美股风险层 {m.get('usRed', '—')} 红"]
     if d["radar"]:
