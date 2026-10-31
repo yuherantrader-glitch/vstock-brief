@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>vstock 收盘简报</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column, a market "instrument panel" up top, then candidate lists and their track record. A-share convention: red = up, green = down. */
+:root {
+  --bg: #f2f4f6;
+  --paper: #ffffff;
+  --ink: #18212b;
+  --muted: #5d6a78;
+  --line: #d9dfe5;
+  --soft: #e8ecf0;
+  --accent: #1f4b7a;
+  --up: #c4302b;
+  --up-soft: #fbe9e8;
+  --down: #17804f;
+  --down-soft: #e3f3ea;
+  --warn: #9a6400;
+  --warn-soft: #fbf1dc;
+  --f-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --f-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --f-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151a; --paper: #181e25; --ink: #e3e8ee; --muted: #93a0ae; --line: #2a333d; --soft: #222a33;
+    --accent: #8fb6e3; --up: #f0665e; --up-soft: #3a1d1c; --down: #45c286; --down-soft: #15301f;
+    --warn: #e2ac4a; --warn-soft: #33280f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151a; --paper: #181e25; --ink: #e3e8ee; --muted: #93a0ae; --line: #2a333d; --soft: #222a33;
+  --accent: #8fb6e3; --up: #f0665e; --up-soft: #3a1d1c; --down: #45c286; --down-soft: #15301f;
+  --warn: #e2ac4a; --warn-soft: #33280f; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 28px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+.up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--muted); }
+
+header.top { display: grid; gap: 10px; }
+.eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--muted); font-size: 13px; letter-spacing: .04em; }
+.eyebrow b { color: var(--accent); font-weight: 700; letter-spacing: .08em; }
+.datepick { display: inline-flex; align-items: center; gap: 6px; }
+.datepick select { font: inherit; font-family: var(--f-num); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
+.datepick select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+h1 { font-family: var(--f-display); font-size: clamp(30px, 6vw, 44px); line-height: 1.15; margin: 0; text-wrap: balance; }
+h1 small { font-family: var(--f-body); font-size: 15px; font-weight: 500; color: var(--muted); margin-left: 10px; vertical-align: middle; }
+.lede { margin: 0; max-width: 62ch; font-size: 16px; }
+
+.panel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.gauge { background: var(--paper); padding: 14px 16px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.gauge .lab { font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+.gauge .val { font-family: var(--f-num); font-size: 28px; font-weight: 500; line-height: 1.1; }
+.gauge .val em { font-style: normal; font-family: var(--f-body); font-size: 14px; font-weight: 500; margin-left: 6px; }
+.gauge .sub { font-size: 12px; color: var(--muted); }
+.scale { position: relative; height: 8px; border-radius: 4px; display: flex; overflow: hidden; margin-top: 6px; }
+.scale span { height: 100%; }
+.pin { position: relative; height: 0; }
+.pin i { position: absolute; top: -13px; width: 2px; height: 14px; background: var(--ink); transform: translateX(-1px); border-radius: 1px; }
+.ticks { display: flex; justify-content: space-between; font-family: var(--f-num); font-size: 10px; color: var(--muted); }
+.note { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; font-size: 14px; color: var(--ink); }
+.note b { color: var(--accent); }
+
+section { display: grid; gap: 12px; min-width: 0; }
+.sechead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; border-bottom: 2px solid var(--ink); padding-bottom: 6px; }
+h2 { font-family: var(--f-display); font-size: 22px; margin: 0; }
+.sechead p { margin: 0; color: var(--muted); font-size: 13px; }
+.count { font-family: var(--f-num); font-size: 13px; color: var(--muted); margin-left: auto; }
+
+.scroll { overflow-x: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { text-align: left; font-weight: 500; font-size: 12px; color: var(--muted); letter-spacing: .04em; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; background: var(--soft); }
+td { padding: 10px 12px; border-bottom: 1px solid var(--soft); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.r, th.r { text-align: right; }
+td.num, td .num { white-space: nowrap; }
+.stock { white-space: nowrap; }
+.stock b { font-weight: 700; }
+.stock .code { display: block; font-family: var(--f-num); font-size: 12px; color: var(--muted); }
+.news { min-width: 220px; max-width: 360px; font-size: 13px; }
+.news div + div { margin-top: 2px; }
+
+.chip { display: inline-block; font-size: 12px; line-height: 1.5; padding: 0 7px; border-radius: 4px; background: var(--soft); color: var(--muted); white-space: nowrap; margin: 1px 4px 1px 0; }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.bad { background: var(--warn-soft); color: var(--warn); font-weight: 500; }
+.chip.ok { background: var(--soft); color: var(--ink); }
+.chip.miss { background: transparent; border: 1px dashed var(--line); }
+.grade { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; font-family: var(--f-num); font-weight: 500; font-size: 13px; }
+.grade.A { background: var(--accent); color: var(--paper); }
+.grade.B { border: 1px solid var(--muted); color: var(--muted); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.card.A { border-color: var(--accent); }
+.card .hd { display: flex; align-items: center; gap: 10px; }
+.card .hd .stock { flex: 1; min-width: 0; }
+.card .status { font-size: 12px; color: var(--muted); }
+.levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.levels div { display: grid; }
+.levels span { font-size: 11px; color: var(--muted); letter-spacing: .05em; }
+.levels b { font-family: var(--f-num); font-weight: 500; font-size: 16px; }
+.meta { font-size: 13px; color: var(--muted); }
+.meta b { color: var(--ink); font-weight: 500; }
+.empty { background: var(--paper); border: 1px dashed var(--line); border-radius: 10px; padding: 16px; color: var(--muted); font-size: 14px; }
+
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.stat { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.stat span { display: block; font-size: 12px; color: var(--muted); }
+.stat b { font-family: var(--f-num); font-weight: 500; font-size: 22px; }
+.caveat { font-size: 13px; color: var(--muted); margin: 0; }
+.cell-pct { text-align: right; font-family: var(--f-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+footer { border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 8px; font-size: 13px; color: var(--muted); max-width: 72ch; }
+footer p { margin: 0; }
+footer strong { color: var(--ink); }
+
+@media (max-width: 760px) {
+  .panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) { .gauge .val { font-size: 24px; } }
+@media (prefers-reduced-motion: no-preference) { .pin i { transition: left .4s ease; } }
+</style>
+</head>
+<body>
+
+
+<div class="wrap" id="app">
+  <header class="top">
+    <div class="eyebrow">
+      <b>VSTOCK 收盘简报</b>
+      <span id="dateline">—</span>
+      <label class="datepick" for="datesel">往期 <select id="datesel" aria-label="选择交易日"></select></label>
+    </div>
+    <h1 id="tone">—</h1>
+    <p class="lede" id="toneNote"></p>
+  </header>
+
+  <div class="panel" id="panel"></div>
+  <div class="note" id="risk"></div>
+
+  <section id="radar"></section>
+  <section id="swing"></section>
+  <section id="ep"></section>
+  <section id="track"></section>
+
+  <footer>
+    <p><strong>这是规则筛出的候选清单，不是买入建议。</strong>所有阈值是经验起点，大部分没有用实盘样本验证；雷达、突破、EP 的台账样本还少。</p>
+    <p>A 股 T+1：买入当天不能卖，止损最早第二天生效。一字涨停开盘买不到。</p>
+    <p>数据来自新浪、巨潮、乐咕等免费公开源，每个交易日收盘后自动生成。红色为涨，绿色为跌。</p>
+  </footer>
+</div>
+
+<script src="latest.js"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const sgn = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1) + '%';
+  const cls = v => v == null ? 'flat' : v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
+  const pct = v => `<span class="${cls(v)}">${sgn(v)}</span>`;
+  const WD = '日一二三四五六';
+  const weekday = d => '周' + WD[new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10))).getUTCDay()];
+  const stock = (name, code) => `<div class="stock"><b>${esc(name)}</b><span class="code">${esc(code)}</span></div>`;
+
+  function gaugeFG(v, label) {
+    const bands = [[20, '#2f7d5a'], [20, '#7fb48f'], [30, '#b9c0c7'], [15, '#e0a07a'], [15, '#c4302b']];
+    return `<div class="gauge"><span class="lab">恐贪指数</span>
+      <span class="val">${v}<em>${esc(label)}</em></span>
+      <div class="scale" aria-hidden="true">${bands.map(([w, c]) => `<span style="width:${w}%;background:${c}"></span>`).join('')}</div>
+      <div class="pin"><i style="left:${Math.max(0, Math.min(100, v))}%"></i></div>
+      <div class="ticks"><span>0 恐惧</span><span>贪婪 100</span></div></div>`;
+  }
+  function gaugeBond(v, label) {
+    return `<div class="gauge"><span class="lab">股债性价比</span>
+      <span class="val">${v}°C<em>${esc(label)}</em></span>
+      <div class="scale" aria-hidden="true"><span style="width:100%;background:linear-gradient(90deg,#2f6fb0,#b9c0c7 50%,#c4302b)"></span></div>
+      <div class="pin"><i style="left:${Math.max(0, Math.min(100, v))}%"></i></div>
+      <div class="ticks"><span>0 便宜</span><span>贵 100</span></div></div>`;
+  }
+  function gaugeTrend(m) {
+    const c = m.csi;
+    if (!c) return `<div class="gauge"><span class="lab">趋势</span><span class="val" style="font-family:var(--f-body)">${esc(m.trend || '—')}</span></div>`;
+    const d20 = (c.close / c.ema20 - 1) * 100, d50 = (c.close / c.ema50 - 1) * 100;
+    return `<div class="gauge"><span class="lab">沪深300 · 趋势 ${esc(m.trend || '')}</span>
+      <span class="val">${c.close}</span>
+      <span class="sub num">距 EMA20 ${pct(d20)}　距 EMA50 ${pct(d50)}</span></div>`;
+  }
+  function gaugeUS(n) {
+    return `<div class="gauge"><span class="lab">美股风险层</span>
+      <span class="val">${n}<em>红灯</em></span>
+      <span class="sub">VIX 期限结构、VVIX、SKEW、Put/Call。亮灯是风险敞口提示，不是择时信号</span></div>`;
+  }
+
+  function renderRadar(list) {
+    const head = `<div class="sechead"><h2>动量雷达</h2><p>当日被资金追买、且有公告或新闻的股票</p><span class="count">${list.length} 只</span></div>`;
+    if (!list.length) return head + `<div class="empty">今天没有满足条件的候选。</div>`;
+    const rows = list.map(r => {
+      const tags = [];
+      if (r.routine) tags.push('<span class="chip warn">例行公告</span>');
+      if (r.repeat) tags.push(`<span class="chip">重复·首次 ${esc(r.repeat)}</span>`);
+      if (r.quality && r.quality.hint && r.quality.hint !== '无红线') tags.push(`<span class="chip bad">${esc(r.quality.hint)}</span>`);
+      if (r.quality && r.quality.hint === '无红线') tags.push(`<span class="chip ok">质量分 ${r.quality.score} · 无红线</span>`);
+      return `<tr><td>${stock(r.name, r.code)}</td>
+        <td class="r num">${pct(r.chg)}${r.limit ? `<div class="meta">限 ${r.limit}%</div>` : ''}</td>
+        <td class="r num">${r.rvol != null ? r.rvol.toFixed(1) + 'x' : '—'}</td>
+        <td class="r num">${r.mcap ?? '—'} 亿<div class="meta">换手 ${r.turnover ?? '—'}%</div></td>
+        <td class="r num">${r.amount ?? '—'} 亿</td>
+        <td class="num">${esc(r.hits)}<div>${r.strong.map(s => `<span class="chip">${esc(s)}</span>`).join('')}</div></td>
+        <td class="news">${r.news.map(n => `<div>${esc(n)}</div>`).join('') || '—'}<div>${tags.join('')}</div></td></tr>`;
+    }).join('');
+    return head + `<div class="scroll"><table><thead><tr><th>股票</th><th class="r">涨幅</th><th class="r">相对量</th><th class="r">流通市值</th><th class="r">成交额</th><th>命中 / 强项</th><th>催化（公告标题）</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="caveat">入选条件：涨幅 ≥ 涨跌停幅度 × 70%、相对 50 日量 ≥ 3 倍、流通市值 ≤ 50 亿且换手 ≥ 8%、成交额 ≥ 3 亿，满足 4 条，且必须有催化。公告标题来自巨潮，可能被截断。</p>`;
+  }
+
+  function levels(t, s, sp) {
+    return `<div class="levels"><div><span>触发价</span><b>${t ?? '—'}</b></div><div><span>止损</span><b>${s ?? '—'}</b></div><div><span>止损距离</span><b class="${cls(sp)}">${sp != null ? sp.toFixed(1) + '%' : '—'}</b></div></div>`;
+  }
+  function renderSwing(list) {
+    const a = list.filter(x => x.grade === 'A').length;
+    const head = `<div class="sechead"><h2>突破</h2><p>强势上涨后整理完毕、准备再次突破</p><span class="count">A ${a} · B ${list.length - a}</span></div>`;
+    if (!list.length) return head + `<div class="empty">今天没有突破候选。</div>`;
+    return head + `<div class="cards">${list.map(x => `<article class="card ${x.grade}">
+      <div class="hd"><span class="grade ${x.grade}">${x.grade}</span>${stock(x.name, x.code)}<span class="status">${esc(x.status)} · 当日 ${pct(x.day)}</span></div>
+      ${levels(x.trigger, x.stop, x.stopPct)}
+      <div class="meta">前涨 <b class="num">${x.prior ?? '—'}%</b>　整理 <b class="num">${x.days ?? '—'} 日</b>　突破量比 <b class="num">${x.vol ?? '—'}x</b></div>
+      <div>${x.good.map(g => `<span class="chip ok">${esc(g)}</span>`).join('')}${x.missing.map(g => `<span class="chip miss">缺：${esc(g)}</span>`).join('')}</div>
+      ${x.notes.length ? `<div>${x.notes.map(n => `<span class="chip warn" style="white-space:normal">${esc(n)}</span>`).join('')}</div>` : ''}
+    </article>`).join('')}</div>`;
+  }
+  function renderEP(list) {
+    const head = `<div class="sechead"><h2>EP 跳空</h2><p>长期横盘后被一条真消息打出放量跳空</p><span class="count">${list.length} 只</span></div>`;
+    if (!list.length) return head + `<div class="empty">今天没有 EP 信号。这类信号本来就少。</div>`;
+    return head + `<div class="cards">${list.map(x => `<article class="card ${x.grade}">
+      <div class="hd"><span class="grade ${x.grade}">${x.grade}</span>${stock(x.name, x.code)}<span class="status">跳空 ${pct(x.gap)} · 收 ${pct(x.chg)}</span></div>
+      ${levels(x.trigger, x.stop, x.stopPct)}
+      <div class="meta">催化 <b>${esc(x.catalyst || '—')}</b>　横盘 <b class="num">${x.base ?? '—'} 日</b>　量比 <b class="num">${x.vol ?? '—'}x</b></div>
+      ${x.pullback ? `<div class="meta">回踩确认版：<b>${esc(x.pullback)}</b></div>` : ''}
+      ${x.notes.length ? `<div>${x.notes.map(n => `<span class="chip warn" style="white-space:normal">${esc(n)}</span>`).join('')}</div>` : ''}
+    </article>`).join('')}</div>`;
+  }
+
+  function renderTrack(d) {
+    const head = `<div class="sechead"><h2>往期表现</h2><p>每个信号都写进台账，按规则回填后续涨跌</p></div>`;
+    const t = d.t3;
+    const stats = t ? `<div class="stats">
+      <div class="stat"><span>雷达 T+3 样本</span><b>${t.n}</b></div>
+      <div class="stat"><span>次日平均跳空</span><b class="${cls(t.gap)}">${sgn(t.gap)}</b></div>
+      <div class="stat"><span>T+3 平均收益</span><b class="${cls(t.avg)}">${sgn(t.avg)}</b></div>
+      <div class="stat"><span>T+3 胜率</span><b>${t.win}%</b></div></div>
+      <p class="caveat">雷达入场价按扫描日次日开盘价计（T+1 下真正买得到的价格）。</p>` : '';
+    const keep = d.ledger.filter(r => r.grade !== '全部' || r.strat !== '突破').filter(r => !(r.strat !== '突破' && r.grade !== '全部'));
+    const ledger = d.ledger.length ? `<div class="scroll"><table><thead><tr><th>策略</th><th class="r">信号</th><th class="r">已入场</th><th class="r">已了结</th><th class="r">胜率</th><th class="r">平均收益</th><th class="r">平均 R</th></tr></thead><tbody>
+      ${keep.map(r => `<tr><td>${esc(r.strat)}${r.grade !== '全部' ? ` <span class="grade ${r.grade}" style="width:18px;height:18px;font-size:11px">${r.grade}</span>` : ''}</td>
+        <td class="cell-pct">${r.signals ?? '—'}</td><td class="cell-pct">${r.entered ?? '—'}</td><td class="cell-pct">${r.closed ?? '—'}</td>
+        <td class="cell-pct">${r.win != null ? r.win + '%' : '—'}</td><td class="cell-pct">${pct(r.avg)}</td>
+        <td class="cell-pct ${cls(r.r)}">${r.r != null ? (r.r > 0 ? '+' : '') + r.r.toFixed(2) : '—'}</td></tr>`).join('')}
+      </tbody></table></div><p class="caveat">已了结不到 30 笔的只展示，不据此调阈值。按策略规则模拟出场，未扣交易成本。</p>` : '';
+    const bf = d.backfill.length ? `<div class="scroll"><table><thead><tr><th>入选日</th><th>股票</th><th class="r">次日跳空</th><th class="r">T+1</th><th class="r">T+3</th><th class="r">T+5</th><th class="r">截至今日</th></tr></thead><tbody>
+      ${d.backfill.slice().reverse().map(b => `<tr><td class="num">${esc(b.date.slice(5))}</td><td><b>${esc(b.name)}</b> <span class="num" style="color:var(--muted);font-size:12px">${esc(b.code)}</span>${b.blocked ? ' <span class="chip warn">一字买不到</span>' : ''}</td>
+        <td class="cell-pct">${pct(b.gap)}</td><td class="cell-pct">${pct(b.t1)}</td><td class="cell-pct">${pct(b.t3)}</td><td class="cell-pct">${pct(b.t5)}</td><td class="cell-pct"><b>${pct(b.now)}</b></td></tr>`).join('')}
+      </tbody></table></div>` : '';
+    return head + stats + `<h3 style="margin:8px 0 0;font-size:15px">策略台账</h3>` + ledger + (bf ? `<h3 style="margin:8px 0 0;font-size:15px">近期雷达候选回填</h3>` + bf : '');
+  }
+
+  function render(d) {
+    const m = d.market || {};
+    $('dateline').textContent = `${d.date} ${weekday(d.date)} 收盘`;
+    $('tone').innerHTML = esc(m.tone || '—') + `<small>今日定调</small>`;
+    $('toneNote').textContent = m.toneNote || '';
+    $('panel').hidden = m.fg == null;
+    $('panel').innerHTML = m.fg == null ? '' : gaugeFG(m.fg, m.fgLabel || '') + gaugeBond(m.bond ?? 0, m.bondLabel || '') + gaugeTrend(m) + gaugeUS(m.usRed ?? 0);
+    if (m.fg == null && !m.tone) { $('tone').innerHTML = '候选清单<small>这一天还没有大盘温度计</small>'; }
+    $('risk').innerHTML = m.risk ? `<b>风险传导</b>　${esc(m.risk)}` : '';
+    $('risk').hidden = !m.risk;
+    $('radar').innerHTML = renderRadar(d.radar || []);
+    $('swing').innerHTML = renderSwing(d.swing || []);
+    $('ep').innerHTML = renderEP(d.ep || []);
+    $('track').innerHTML = renderTrack(d);
+    document.title = 'vstock 收盘简报';
+  }
+
+  const latest = window.VSTOCK_LATEST;
+  const dates = (window.VSTOCK_DATES || (latest ? [latest.date] : [])).slice().sort().reverse();
+  const sel = $('datesel');
+  sel.innerHTML = dates.map(d => `<option value="${d}">${d}</option>`).join('');
+
+  async function show(date) {
+    if (!latest) return;
+    if (!date || date === latest.date || !dates.includes(date)) { sel.value = latest.date; render(latest); return; }
+    try {
+      const r = await fetch('d/' + date + '.json'); if (!r.ok) throw new Error(r.status);
+      render(await r.json()); sel.value = date;
+    } catch (e) { sel.value = latest.date; render(latest); }
+  }
+  sel.addEventListener('change', () => {
+    const v = sel.value;
+    if (v === (latest && latest.date)) { history.replaceState(null, '', location.pathname + location.search); show(v); }
+    else location.hash = v;
+  });
+  window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+  show(location.hash.slice(1));
+})();
+</script>
+
+</body>
+</html>
