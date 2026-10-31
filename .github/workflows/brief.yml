@@ -1,0 +1,21 @@
+# 每个工作日北京时间 20:00 前后，把 docs/latest.json 里的简报推送到飞书群。
+# GitHub 的定时任务高峰期可能晚 5–30 分钟，所以定在 19:50（UTC 11:50）。
+name: vstock 晚间推送
+on:
+  schedule:
+    - cron: "50 11 * * 1-5"
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: 推送飞书
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
+          PAGES_URL: ${{ vars.PAGES_URL }}
+        run: python3 scripts/push_feishu.py
