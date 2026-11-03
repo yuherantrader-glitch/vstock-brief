@@ -1,6 +1,7 @@
-# 每个工作日北京时间 20:00 前后，把 docs/latest.json 里的简报推送到飞书群。
-# GitHub 的定时任务高峰期可能晚 5–30 分钟，所以定在 19:50（UTC 11:50）。
-# 本机补跑（错过 19:50，或第二天早上补前一天）上传后会用 workflow_dispatch(catchup=1) 触发补推。
+# 把 docs/latest.json 里的简报推送到飞书群。
+# 主路径（2026-11-03 起）：本机每日流程上传后立即用 workflow_dispatch(push=1) 触发，约 17:00 收到。
+# 兜底：工作日 19:50（UTC 11:50）定时运行，只有当天还没推过时才发——本机没跑完就发「没有新数据」。
+# GitHub 的定时任务高峰期会延迟甚至数小时（11-02 那次拖到次日 04:53），所以它只做兜底。
 name: vstock 晚间推送
 on:
   schedule:
@@ -11,8 +12,13 @@ on:
         description: "补推：本机补跑完成后触发，按最新一期推送并在标题标「补推」"
         required: false
         default: "0"
+      push:
+        description: "本机上传后立即推送"
+        required: false
+        default: "0"
 permissions:
   contents: read
+  actions: read
 jobs:
   push:
     runs-on: ubuntu-latest
@@ -25,4 +31,6 @@ jobs:
           FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
           PAGES_URL: ${{ vars.PAGES_URL }}
           CATCHUP: ${{ github.event.inputs.catchup }}
+          PUSHED: ${{ github.event.inputs.push }}
+          GH_TOKEN: ${{ github.token }}
         run: python3 scripts/push_feishu.py
