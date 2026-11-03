@@ -4,7 +4,19 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 CST = timezone(timedelta(hours=8))
-today = os.environ.get("TODAY") or datetime.now(CST).date().isoformat()
+now = datetime.fromisoformat(os.environ["NOW"]) if os.environ.get("NOW") else datetime.now(CST)
+# 2026-11-03：GitHub 的定时任务可能大幅延迟（11-02 19:50 那次拖到 11-03 04:53 才跑）。
+# 定时触发时，按「本该推送的那个晚上」判断数据是否最新：中午以前跑的，算前一个工作日晚上的那次。
+scheduled = os.environ.get("GITHUB_EVENT_NAME", "schedule") == "schedule"
+slot = now.date()
+if scheduled and now.hour < 12:
+    slot -= timedelta(days=1)
+    while slot.weekday() >= 5:
+        slot -= timedelta(days=1)
+today = os.environ.get("TODAY") or slot.isoformat()
+slot_time = datetime.combine(slot, datetime.min.time(), tzinfo=CST).replace(hour=19, minute=50)
+late_note = (f"\n<font color='grey'>GitHub 定时任务延迟，本条实际发出于 {now:%m-%d %H:%M}。</font>"
+             if scheduled and (now - slot_time) > timedelta(hours=1) else "")
 repo = os.environ.get("GITHUB_REPOSITORY", "owner/repo")
 owner, name = repo.split("/")
 page = os.environ.get("PAGES_URL", "").strip() or f"https://{owner.lower()}.github.io/{name}/"
@@ -14,9 +26,30 @@ m = d.get("market", {})
 fmt = lambda v: "—" if v is None else f"{v:+.1f}%"
 
 catchup = os.environ.get("CATCHUP", "").strip() in ("1", "true", "yes")
-if d["date"] != today and not catchup:
-    title, tmpl = f"vstock 简报 · 今天没有新数据", "grey"
-    body = (f"最新一期仍是 **{d['date']}**。\n今天可能不是交易日，或者本机的每日流程没有跑完（电脑没开机、网络不通）。")
+pushed = os.environ.get("PUSHED", "").strip() in ("1", "true", "yes")
+if pushed and not catchup:
+    late_note = ""
+
+# 定时任务只做兜底：这个晚上已经有一次本机触发的推送成功了，就不再发
+if scheduled and not os.environ.get("DRY_RUN"):
+    try:
+        since = datetime.combine(slot, datetime.min.time(), tzinfo=CST).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{repo}/actions/runs?event=workflow_dispatch&status=success&created=%3E%3D{since}&per_page=5",
+            headers={"Authorization": f"Bearer {os.environ.get('GH_TOKEN', '')}", "Accept": "application/vnd.github+json", "User-Agent": "vstock-brief"})
+        done = json.loads(urllib.request.urlopen(req, timeout=20).read().decode()).get("total_count", 0)
+        if done:
+            print(f"{slot} 已由本机触发推送过 {done} 次，定时任务跳过")
+            sys.exit(0)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        print("查询推送记录失败，照常推送：", e)
+
+if d["date"] != today and not catchup and not pushed:
+    title, tmpl = f"vstock 简报 · {today} 没有新数据", "grey"
+    body = (f"{today} 的简报还没有上传，网页上最新一期仍是 **{d['date']}**。\n"
+            f"可能是非交易日，或者本机的每日流程没有跑完（电脑没开机、网络不通）。" + late_note)
 else:
     title, tmpl = f"vstock 收盘简报 · {d['date']}" + ("（补推）" if catchup else ""), {"防守观望": "orange", "台风预警": "red"}.get(m.get("tone"), "blue")
     lines = [f"**定调：{m.get('tone', '—')}**　{m.get('toneNote', '')}",
@@ -37,7 +70,7 @@ else:
     if d.get("t3"):
         t = d["t3"]
         lines.append(f"\n雷达 T+3：{t['n']} 条样本，平均 {fmt(t['avg'])}，胜率 {t['win']}%")
-    lines.append("\n<font color='grey'>候选清单，不是买入建议。A 股 T+1。</font>")
+    lines.append("\n<font color='grey'>候选清单，不是买入建议。A 股 T+1。</font>" + late_note)
     body = "\n".join(lines)
 
 card = {"config": {"wide_screen_mode": True},
