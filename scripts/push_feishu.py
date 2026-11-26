@@ -63,14 +63,20 @@ else:
     lines.append(f"\n**突破** A {len(a)} · B {len(d['swing']) - len(a)}")
     for s in a:
         lines.append(f"- {s['name']} {s['code']}　{s['status']}　触发 {s['trigger']}　止损 {s['stop']}")
-    if d["ep"]:
-        lines.append("\n**EP 跳空**")
-        for e in d["ep"]:
-            lines.append(f"- {e['name']} {e['code']}［{e['grade']}］跳空 {fmt(e['gap'])}　{e['catalyst']}　触发 {e['trigger']}")
+    p = d.get("paper")      # 信号台（模拟交易），2026-11-25 加入；与 vstock/share.py 的 paper_lines 写法一致
+    if p:
+        f = lambda v: "—" if v is None else f"{v * 100:+.1f}%"
+        lines.append(f"\n**信号台 · 模拟 100 万**　总值 {p['equity'] / 1e4:.1f} 万（{f(p['ret'])}，今日 {p['day']:+,.0f} 元）")
+        lines.append(f"仓位 {(p.get('exposure') or 0) * 100:.0f}% / 上限 {(p.get('cap') or 0) * 100:.0f}%　行情阶段 {p.get('stage') or '—'}")
+        lines.append("　".join(f"{s['name']} {s['equity'] / 1e4:.1f} 万（{f(s['ret'])}，持 {s['open']}）" for s in p["sleeves"]))
+        if p["buys"]:
+            lines.append("明日买：" + "；".join(f"[{o['sleeve']}] {o['name']}" for o in p["buys"][:6]) + ("…" if len(p["buys"]) > 6 else ""))
+        if p["sells"]:
+            lines.append("明日卖：" + "；".join(f"[{o['sleeve']}] {o['name']}（{(o['text'] or '').split('：')[-1]}）" for o in p["sells"][:6]))
     if d.get("t3"):
         t = d["t3"]
         lines.append(f"\n雷达 T+3：{t['n']} 条样本，平均 {fmt(t['avg'])}，胜率 {t['win']}%")
-    lines.append("\n<font color='grey'>候选清单，不是买入建议。A 股 T+1。</font>" + late_note)
+    lines.append("\n<font color='grey'>候选清单和模拟账户，不是买入建议。A 股 T+1。</font>" + late_note)
     body = "\n".join(lines)
 
 card = {"config": {"wide_screen_mode": True},
