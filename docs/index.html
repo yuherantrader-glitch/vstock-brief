@@ -149,11 +149,11 @@ footer strong { color: var(--ink); }
 
   <section id="radar"></section>
   <section id="swing"></section>
-  <section id="ep"></section>
+  <section id="paper"></section>
   <section id="track"></section>
 
   <footer>
-    <p><strong>这是规则筛出的候选清单，不是买入建议。</strong>所有阈值是经验起点，大部分没有用实盘样本验证；雷达、突破、EP 的台账样本还少。</p>
+    <p><strong>这是规则筛出的候选清单，不是买入建议。</strong>所有阈值是经验起点，大部分没有用实盘样本验证；雷达、突破的台账样本还少；信号台是按规则记账的模拟账户。</p>
     <p>A 股 T+1：买入当天不能卖，止损最早第二天生效。一字涨停开盘买不到。</p>
     <p>数据来自新浪、巨潮、乐咕等免费公开源，每个交易日收盘后自动生成。红色为涨，绿色为跌。</p>
   </footer>
@@ -236,16 +236,29 @@ footer strong { color: var(--ink); }
       ${x.notes.length ? `<div>${x.notes.map(n => `<span class="chip warn" style="white-space:normal">${esc(n)}</span>`).join('')}</div>` : ''}
     </article>`).join('')}</div>`;
   }
-  function renderEP(list) {
-    const head = `<div class="sechead"><h2>EP 跳空</h2><p>长期横盘后被一条真消息打出放量跳空</p><span class="count">${list.length} 只</span></div>`;
-    if (!list.length) return head + `<div class="empty">今天没有 EP 信号。这类信号本来就少。</div>`;
-    return head + `<div class="cards">${list.map(x => `<article class="card ${x.grade}">
-      <div class="hd"><span class="grade ${x.grade}">${x.grade}</span>${stock(x.name, x.code)}<span class="status">跳空 ${pct(x.gap)} · 收 ${pct(x.chg)}</span></div>
-      ${levels(x.trigger, x.stop, x.stopPct)}
-      <div class="meta">催化 <b>${esc(x.catalyst || '—')}</b>　横盘 <b class="num">${x.base ?? '—'} 日</b>　量比 <b class="num">${x.vol ?? '—'}x</b></div>
-      ${x.pullback ? `<div class="meta">回踩确认版：<b>${esc(x.pullback)}</b></div>` : ''}
-      ${x.notes.length ? `<div>${x.notes.map(n => `<span class="chip warn" style="white-space:normal">${esc(n)}</span>`).join('')}</div>` : ''}
-    </article>`).join('')}</div>`;
+  function renderPaper(p) {
+    const head = `<div class="sechead"><h2>信号台 · 模拟交易</h2><p>100 万按规则模拟：自选 75 / 突破 10 / 动量 15，收盘出信号、次日开盘成交</p></div>`;
+    if (!p) return head + `<div class="empty">这一天没有信号台记录。</div>`;
+    const P = v => v == null ? '—' : (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+    const C = v => v == null ? 'flat' : v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
+    const W = v => (v / 1e4).toFixed(1) + ' 万';
+    const stats = `<div class="stats">
+      <div class="stat"><span>账户总值</span><b>${W(p.equity)}</b></div>
+      <div class="stat"><span>累计（自 ${esc((p.start || '').slice(5))}）</span><b class="${C(p.ret)}">${P(p.ret)}</b></div>
+      <div class="stat"><span>今日</span><b class="${C(p.day)}">${p.day > 0 ? '+' : ''}${Math.round(p.day).toLocaleString()} 元</b></div>
+      <div class="stat"><span>仓位 / 上限</span><b>${Math.round((p.exposure || 0) * 100)}% / ${Math.round((p.cap || 0) * 100)}%</b></div></div>
+      <p class="caveat">总仓位上限由温度计定调决定（今天「${esc(p.tone || '—')}」），哪一块能开新仓由行情阶段决定（今天「${esc(p.stage || '—')}」）。</p>`;
+    const sl = `<div class="scroll"><table><thead><tr><th>板块</th><th class="r">现值</th><th class="r">收益</th><th class="r">持仓</th><th class="r">已平</th><th class="r">胜率</th></tr></thead><tbody>
+      ${p.sleeves.map(s => `<tr><td><b>${esc(s.name)}</b> <span class="meta">${W(s.capital)}</span></td><td class="cell-pct">${W(s.equity)}</td><td class="cell-pct ${C(s.ret)}">${P(s.ret)}</td><td class="cell-pct">${s.open ?? '—'}</td><td class="cell-pct">${s.closed ?? '—'}</td><td class="cell-pct">${s.win == null ? '—' : Math.round(s.win * 100) + '%'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    const ord = (p.buys.length || p.sells.length) ? `<h3 style="margin:8px 0 0;font-size:15px">下一个交易日</h3><div class="scroll"><table><tbody>
+      ${p.sells.map(o => `<tr><td><span class="chip warn">卖</span> ${esc(o.sleeve)}</td><td>${stock(o.name, o.code)}</td><td>${esc(o.text || '')}</td></tr>`).join('')}
+      ${p.buys.map(o => `<tr><td><span class="chip ok">买</span> ${esc(o.sleeve)}</td><td>${stock(o.name, o.code)}</td><td>${esc(o.kind || '')}，止损 ${o.stop ?? '—'}<div class="meta">${esc(o.note || '')}</div></td></tr>`).join('')}
+      </tbody></table></div>` : `<div class="empty">下一个交易日没有待执行的单子。</div>`;
+    const pos = p.positions.length ? `<h3 style="margin:8px 0 0;font-size:15px">当前持仓（${p.positions.length}）</h3><div class="scroll"><table><thead><tr><th>板块</th><th>股票</th><th>买入日</th><th class="r">涨跌</th><th>下一步</th></tr></thead><tbody>
+      ${p.positions.map(x => `<tr><td>${esc(x.sleeve)}</td><td>${stock(x.name, x.code)}<div class="meta">${esc(x.note || '')}</div></td><td class="num">${esc((x.entry || '').slice(5))}</td><td class="cell-pct ${C(x.ret)}">${P(x.ret)}</td><td>${esc(x.next || '')}</td></tr>`).join('')}
+      </tbody></table></div>` : '';
+    return head + stats + sl + ord + pos + `<p class="caveat">${esc(p.note || '')}。模拟记账，不是买入建议；扣往返 0.21% 成本，一字涨停买不到、一字跌停卖不出。</p>`;
   }
 
   function renderTrack(d) {
@@ -283,7 +296,7 @@ footer strong { color: var(--ink); }
     $('risk').hidden = !m.risk;
     $('radar').innerHTML = renderRadar(d.radar || []);
     $('swing').innerHTML = renderSwing(d.swing || []);
-    $('ep').innerHTML = renderEP(d.ep || []);
+    $('paper').innerHTML = renderPaper(d.paper);
     $('track').innerHTML = renderTrack(d);
     document.title = 'vstock 收盘简报';
   }
